@@ -1,20 +1,55 @@
-var express = require('express');
-var path = require('path');
-var cookieParser = require('cookie-parser');
-var logger = require('morgan');
+const express = require('express');
+const dotenv = require('dotenv');
+dotenv.config({path: './config/config.env'});
+const path = require('path');
+const cookieParser = require('cookie-parser');
+const logger = require('morgan');
+const colors = require('colors');
+const mongoose = require('mongoose');
 
-var indexRouter = require('./routes/index');
-var usersRouter = require('./routes/users');
+mongoose.connect(process.env.DATABASE_CONNECTION_LINK, {
+  useNewUrlParser: true,
+  useCreateIndex: true,
+  useFindAndModify: false,
+  useUnifiedTopology: true,
+});
 
-var app = express();
+const dbConnection = mongoose.connection;
+dbConnection.on('error', () => {
+  console.log('Error during DB connection'.red.bold);
+  process.exit(1);
+});
+dbConnection.on('open', () => {
+  console.log('Successfully connected to database'.green.bold);
+});
+
+/*
+(async () => {
+  try {
+    await mongoose.connect(process.env.DATABASE_CONNECTION_LINK, {
+      useNewUrlParser: true,
+      useCreateIndex: true,
+      useFindAndModify: false,
+      useUnifiedTopology: true,
+    });
+    console.log('Successfully connected to database'.green.bold);
+  } catch (e) {
+    console.log('Error during DB connection'.red.bold);
+    process.exit(1);
+  }
+})();
+ */
+
+const app = express();
 
 app.use(logger('dev'));
 app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({extended: false}));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
 
-app.use('/', indexRouter);
-app.use('/users', usersRouter);
+const plansRouter = require('./routes/plans');
+app.use('/api/v1/plans', plansRouter);
 
-module.exports = app;
+//Running server
+const port = process.env.PORT || 5000;
+app.listen(port, () => console.log('Server started'.blue.bold));
