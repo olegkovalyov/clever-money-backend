@@ -4,7 +4,6 @@ const types = mongoose.Schema.Types;
 const planSchema = new mongoose.Schema({
   name: {
     type: types.String,
-    unique: true,
     required: [true, `'name' is required`],
   },
   startDate: {
@@ -18,6 +17,10 @@ const planSchema = new mongoose.Schema({
   active: {
     type: types.Boolean,
     default: true,
+  },
+  userId: {
+    type: types.ObjectId,
+    required: [true, `'userId' is required`],
   },
 });
 

@@ -3,6 +3,7 @@ const asyncErrorHandler = require('../utils/asyncErrorHandler');
 const AppError = require('../utils/appError');
 const httpStatus = require('http-status-codes');
 const Joi = require('@hapi/joi');
+const mongoose = require('mongoose');
 
 const validatePlanData = (name, startDate, endDate) => {
   const validationSchema = Joi.object({
@@ -53,16 +54,27 @@ exports.createPlan = asyncErrorHandler(async (req, res, next) => {
     name: req.body.name,
     startDate: req.body.startDate,
     endDate: req.body.endDate,
+    userId: mongoose.Types.ObjectId(),
   });
   res.send(plan);
 });
 
 exports.updatePlan = asyncErrorHandler(async (req, res, next) => {
-  let error = validateId(req.params.id);
+  const id = req.params.id;
+  const error = validateId(id);
   if (error) {
     return next(error);
   }
-  res.send('Update plan');
+
+  const plan = await Plan.findByIdAndUpdate(id, req.body, {
+    new: true,
+    runValidators: true,
+  });
+
+  if (!plan) {
+    return next(new AppError(httpStatus.NOT_FOUND, 'Error updating plan', {'_id': id}));
+  }
+  res.send(plan);
 });
 
 exports.deletePlan = asyncErrorHandler(async (req, res, next) => {
@@ -74,25 +86,55 @@ exports.deletePlan = asyncErrorHandler(async (req, res, next) => {
 });
 
 exports.getPlan = asyncErrorHandler(async (req, res, next) => {
-  let error = validateId(req.params.id);
+  const id = req.params.id;
+  let error = validateId(id);
   if (error) {
     return next(error);
   }
-  const plan = await Plan.findById(req.params.id);
+  const plan = await Plan.findById(id);
   if (!plan) {
-    next(new AppError(httpStatus.NOT_FOUND, 'Plan not found', {'_id': req.params.id}));
+    next(new AppError(httpStatus.NOT_FOUND, 'Plan not found', {'_id': id}));
   }
   res.send(plan);
 });
 
 exports.getPlans = asyncErrorHandler(async (req, res, next) => {
-
-  const pageNumber = req.query.pageNumber;
-  const pageSize = req.query.pageSize;
   const planQuery = Plan.find();
-  if (pageNumber !== undefined && pageSize !== undefined) {
-    planQuery.skip((parseInt(pageNumber) - 1) * parseInt(pageSize)).limit(parseInt(pageSize));
+
+  // pagination
+  if (req.query.pageNumber !== undefined
+      && req.query.pageSize !== undefined
+  ) {
+    const pageNumber = parseInt(req.query.pageNumber) || 1;
+    const pageSize = parseInt(req.query.pageSize) || 20;
+    planQuery.skip((pageNumber - 1) * pageSize).limit(pageSize);
   }
+
+  // sorting
+  const sortFields = ['name', 'startDate', 'endDate'];
+  const directions = ['desc', 'asc'];
+  if (req.query.sort !== undefined
+      && req.query.direction !== undefined
+      && sortFields.includes(req.query.sort)
+      && directions.includes(req.query.direction)
+  ) {
+    const sortDirection = (req.query.direction === 'asc') ? 1 : -1;
+    switch (req.query.sort) {
+      case 'name':
+        planQuery.sort({name: sortDirection});
+        break;
+      case 'startDate':
+        planQuery.sort({startDate: sortDirection});
+        break;
+      case 'endDate':
+        planQuery.sort({endDate: sortDirection});
+        break;
+    }
+  } else {
+    planQuery.sort({startDate: -1});
+  }
+
+  // execute query
   const plans = await planQuery;
   res.status(200).send(plans);
 });
