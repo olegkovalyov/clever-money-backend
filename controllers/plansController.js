@@ -1,104 +1,124 @@
-const Plan = require('../models/Plan');
-const asyncErrorHandler = require('../utils/asyncErrorHandler');
-const AppError = require('../utils/appError');
 const httpStatus = require('http-status-codes');
-const Joi = require('@hapi/joi');
+const Plan = require('../models/Plan');
+const AppError = require('../classes/AppError');
+const DataValidator = require('../classes/DataValidator');
 const mongoose = require('mongoose');
 
-const validatePlanData = (name, startDate, endDate) => {
-  const validationSchema = Joi.object({
-    name: Joi.string().min(2).max(20),
-    startDate: Joi.date(),
-    endDate: Joi.date(),
-  });
-
-  const validationResult = validationSchema.validate({
-    name: name,
-    startDate: startDate,
-    endDate: endDate,
-  });
-  if (validationResult.error !== undefined) {
-    let message = '';
-    let errors = {};
-    validationResult.error.details.forEach((error, i) => {
-      message += error.message + '\n';
-      errors[`${error.context.key}`] = error.context.value;
+exports.createPlan = async (req, res, next) => {
+  try {
+    const dataValidator = new DataValidator();
+    if (!dataValidator.validateDate('startDate', req.body.startDate)) {
+      let error = new AppError();
+      error.statusCode = httpStatus.BAD_REQUEST;
+      error.message = dataValidator.message;
+      error.errors = dataValidator.errors;
+      return next(error);
+    }
+    if (!dataValidator.validateDate('endDate', req.body.endDate)) {
+      let error = new AppError();
+      error.statusCode = httpStatus.BAD_REQUEST;
+      error.message = dataValidator.message;
+      error.errors = dataValidator.errors;
+      return next(error);
+    }
+    if (!dataValidator.validateName(req.body.name)) {
+      let error = new AppError();
+      error.statusCode = httpStatus.BAD_REQUEST;
+      error.message = dataValidator.message;
+      error.errors = dataValidator.errors;
+      return next(error);
+    }
+    const plan = await Plan.create({
+      name: req.body.name,
+      startDate: req.body.startDate,
+      endDate: req.body.endDate,
+      userId: mongoose.Types.ObjectId(),
     });
-    return new AppError(httpStatus.BAD_REQUEST, message, errors);
+    res.send(plan);
+  } catch (error) {
+    next(error);
   }
-  return null;
 };
 
-const validateId = (id) => {
-  const validationSchema = Joi.object({
-    id: Joi.string().alphanum().length(24),
-  });
+exports.updatePlan = async (req, res, next) => {
+  try {
+    const dataValidator = new DataValidator();
+    if (!dataValidator.validateMongoId(req.params.id)) {
+      let error = new AppError();
+      error.statusCode = httpStatus.BAD_REQUEST;
+      error.message = dataValidator.message;
+      error.errors = dataValidator.errors;
+      return next(error);
+    }
 
-  const validationResult = validationSchema.validate({id: id});
-  if (validationResult.error !== undefined) {
-    let message = validationResult.error.details[0].message;
-    const errors = {
-      id: id,
-    };
-    return new AppError(httpStatus.BAD_REQUEST, message, errors);
+    const plan = await Plan.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true,
+    });
+
+    if (!plan) {
+      let error = new AppError();
+      error.statusCode = httpStatus.NOT_FOUND;
+      error.message = 'Plan not found';
+      error.errors = {'id': req.params.id};
+      return next(error);
+    }
+    res.send(plan);
+  } catch (error) {
+    next(error);
   }
-  return null;
 };
 
-exports.createPlan = asyncErrorHandler(async (req, res, next) => {
-  let error = validatePlanData(req.body.name, req.body.startDate, req.body.endDate);
-  if (error) {
-    return next(error);
+exports.deletePlan = async (req, res, next) => {
+  try {
+    const dataValidator = new DataValidator();
+    if (!dataValidator.validateMongoId(req.params.id)) {
+      let error = new AppError();
+      error.statusCode = httpStatus.BAD_REQUEST;
+      error.message = dataValidator.message;
+      error.errors = dataValidator.errors;
+      return next(error);
+    }
+    const result = await Plan.findByIdAndDelete(req.params.id);
+    if (!result) {
+      let error = new AppError();
+      error.statusCode = httpStatus.NOT_FOUND;
+      error.message = 'Plan not found';
+      error.errors = {'id': req.params.id};
+      return next(error);
+    } else {
+      res.send(result);
+    }
+  } catch (error) {
+    next(error);
   }
-  const plan = await Plan.create({
-    name: req.body.name,
-    startDate: req.body.startDate,
-    endDate: req.body.endDate,
-    userId: mongoose.Types.ObjectId(),
-  });
-  res.send(plan);
-});
+};
 
-exports.updatePlan = asyncErrorHandler(async (req, res, next) => {
-  const id = req.params.id;
-  const error = validateId(id);
-  if (error) {
-    return next(error);
+exports.getPlan = async (req, res, next) => {
+  try {
+    const dataValidator = new DataValidator();
+    if (!dataValidator.validateMongoId(req.params.id)) {
+      let error = new AppError();
+      error.statusCode = httpStatus.BAD_REQUEST;
+      error.message = dataValidator.message;
+      error.errors = dataValidator.errors;
+      return next(error);
+    }
+    const plan = await Plan.findById(req.params.id);
+    if (!plan) {
+      let error = new AppError();
+      error.statusCode = httpStatus.NOT_FOUND;
+      error.message = 'Plan not found';
+      error.errors = {'id': req.params.id};
+      return next(error);
+    }
+    res.send(plan);
+  } catch (error) {
+    next(error);
   }
+};
 
-  const plan = await Plan.findByIdAndUpdate(id, req.body, {
-    new: true,
-    runValidators: true,
-  });
-
-  if (!plan) {
-    return next(new AppError(httpStatus.NOT_FOUND, 'Error updating plan', {'_id': id}));
-  }
-  res.send(plan);
-});
-
-exports.deletePlan = asyncErrorHandler(async (req, res, next) => {
-  let error = validateId(req.params.id);
-  if (error) {
-    return next(error);
-  }
-  res.send('Delete plan');
-});
-
-exports.getPlan = asyncErrorHandler(async (req, res, next) => {
-  const id = req.params.id;
-  let error = validateId(id);
-  if (error) {
-    return next(error);
-  }
-  const plan = await Plan.findById(id);
-  if (!plan) {
-    next(new AppError(httpStatus.NOT_FOUND, 'Plan not found', {'_id': id}));
-  }
-  res.send(plan);
-});
-
-exports.getPlans = asyncErrorHandler(async (req, res, next) => {
+exports.getPlans = async (req, res, next) => {
   const planQuery = Plan.find();
 
   // pagination
@@ -137,4 +157,4 @@ exports.getPlans = asyncErrorHandler(async (req, res, next) => {
   // execute query
   const plans = await planQuery;
   res.status(200).send(plans);
-});
+};
