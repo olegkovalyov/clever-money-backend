@@ -7,6 +7,7 @@ const planSchema = new mongoose.Schema({
     required: [true, `'name' is required`],
     minlength: 3,
     maxlength: 20,
+    trim: true,
   },
   startDate: {
     type: types.Date,
@@ -24,7 +25,7 @@ const planSchema = new mongoose.Schema({
     type: types.ObjectId,
     required: [true, `'userId' is required`],
   },
-});
+}, {timestamps: true});
 
 const Plan = mongoose.model('Plan', planSchema);
 

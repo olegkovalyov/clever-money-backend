@@ -1,4 +1,6 @@
 const Joi = require('@hapi/joi');
+const AppError = require('../classes/AppError');
+const httpStatus = require('http-status-codes');
 
 class DataValidator {
   _message = null;
@@ -56,7 +58,7 @@ class DataValidator {
   validateName(name) {
     this.reset();
     const validationSchema = Joi.object({
-      name: Joi.string().min(3).max(10).required(),
+      name: Joi.string().min(2).max(50).required(),
     });
     const validationResult = validationSchema.validate({name: name});
     if (validationResult.error !== undefined) {
@@ -70,9 +72,51 @@ class DataValidator {
     }
   }
 
+  validateEmail(email) {
+    this.reset();
+    const validationSchema = Joi.object({
+      email: Joi.string().email().required(),
+    });
+    const validationResult = validationSchema.validate({email: email});
+    if (validationResult.error !== undefined) {
+      this._message = validationResult.error.details[0].message;
+      this._errors = {
+        email: email || null,
+      };
+      return false;
+    } else {
+      return true;
+    }
+  }
+
+  validatePassword(password) {
+    this.reset();
+    const validationSchema = Joi.object({
+      password: Joi.string().min(7).required(),
+    });
+    const validationResult = validationSchema.validate({password: password});
+    if (validationResult.error !== undefined) {
+      this._message = validationResult.error.details[0].message;
+      this._errors = {
+        password: password || null,
+      };
+      return false;
+    } else {
+      return true;
+    }
+  }
+
   reset() {
     this._message = null;
     this._errors = null;
+  }
+
+  getErrorObject() {
+    let error = new AppError();
+    error.statusCode = httpStatus.BAD_REQUEST;
+    error.message = this.message;
+    error.errors = this.errors;
+    return error;
   }
 }
 

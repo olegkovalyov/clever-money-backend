@@ -40,20 +40,22 @@ module.exports = (error, req, res, next) => {
             [error.errors.path]: error.errors.value,
           },
         });
-        let message = 'Failed to load data';
-        let errorDetails = {};
-        errorDetails[`${error.path}`] = error.value;
       } else {
         res.status(httpStatus.INTERNAL_SERVER_ERROR).send('Unknown mongoose error');
-        console.log(error);
       }
     }
       break;
-    case 'SyntaxError' : {
-      res.status(httpStatus.INTERNAL_SERVER_ERROR).send('Internal server error');
-      console.log(error);
+    default : {
+      res.status(httpStatus.INTERNAL_SERVER_ERROR).json({
+        status: 'fail',
+        message: 'Internal server error',
+        errors: {},
+      });
     }
       break;
   }
-  console.log(errorType);
+  if (process.env.NODE_ENV === 'development') {
+    console.log(error);
+    console.log(errorType);
+  }
 };
