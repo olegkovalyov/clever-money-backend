@@ -6,7 +6,7 @@ const planSchema = new mongoose.Schema({
     type: types.String,
     required: [true, `'name' is required`],
     minlength: 3,
-    maxlength: 20,
+    maxlength: 50,
     trim: true,
   },
   startDate: {

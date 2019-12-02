@@ -1,4 +1,5 @@
 const httpStatus = require('http-status-codes');
+const errorConstants = require('../constants/Error');
 
 module.exports = (error, req, res, next) => {
   const errorType = error.constructor.name;
@@ -8,6 +9,7 @@ module.exports = (error, req, res, next) => {
         status: 'fail',
         message: error.message,
         errors: error.errors,
+        errorCode: error.errorCode,
       });
       break;
     case 'MongoError': {
@@ -16,6 +18,7 @@ module.exports = (error, req, res, next) => {
         res.status(httpStatus.BAD_REQUEST).json({
           status: 'fail',
           message: `Duplicate field value: ${matches[0]}. Please use another value`,
+          errorCode: errorConstants.DUPLICATE_KEY,
           errors: {},
         });
       }
@@ -28,6 +31,7 @@ module.exports = (error, req, res, next) => {
         res.status(httpStatus.BAD_REQUEST).json({
           status: 'fail',
           message: mongooseError.message,
+          errorCode: errorConstants.MONGOOSE_VALIDATION_ERROR,
           errors: {
             [mongooseError.path]: mongooseError.value,
           },
@@ -36,6 +40,7 @@ module.exports = (error, req, res, next) => {
         res.status(httpStatus.BAD_REQUEST).json({
           status: 'fail',
           message: 'Failed to load data',
+          errorCode: errorConstants.MONGOOSE_CAST_ERROR,
           errors: {
             [error.errors.path]: error.errors.value,
           },
@@ -45,10 +50,22 @@ module.exports = (error, req, res, next) => {
       }
     }
       break;
+    case 'JsonWebTokenError':
+    case 'TokenExpiredError':
+      res.status(httpStatus.UNAUTHORIZED).json({
+        status: 'fail',
+        message: 'Invalid or expired token',
+        errorCode: errorConstants.INVALID_OR_EXPIRED_TOKEN,
+        errors: {
+          token: req.headers.authorization.split(' ')[1],
+        },
+      });
+      break;
     default : {
       res.status(httpStatus.INTERNAL_SERVER_ERROR).json({
         status: 'fail',
         message: 'Internal server error',
+        errorCode: errorConstants.INTERNAL_SERVER_ERROR,
         errors: {},
       });
     }

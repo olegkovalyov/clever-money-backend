@@ -2,6 +2,15 @@ class AppError extends Error {
   _statusCode = 500;
   _message = 'Internal server error';
   _errors = null;
+  _errorCode = null;
+
+  get errorCode() {
+    return this._errorCode;
+  }
+
+  set errorCode(value) {
+    this._errorCode = value;
+  }
 
   constructor() {
     super();

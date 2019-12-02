@@ -1,10 +1,19 @@
 const Joi = require('@hapi/joi');
 const AppError = require('../classes/AppError');
 const httpStatus = require('http-status-codes');
+const errorConstants = require('../constants/Error');
 
 class DataValidator {
+  get errorCode() {
+    return this._errorCode;
+  }
+
+  set errorCode(value) {
+    this._errorCode = value;
+  }
   _message = null;
   _errors = null;
+  _errorCode = null;
 
   get message() {
     return this._message;
@@ -31,6 +40,7 @@ class DataValidator {
       this._errors = {
         id: id,
       };
+      this._errorCode = errorConstants.INVALID_ID;
       return false;
     } else {
       return true;
@@ -49,6 +59,7 @@ class DataValidator {
       this._errors = {
         [fieldName]: value || null,
       };
+      this._errorCode = errorConstants.INVALID_DATE;
       return false;
     } else {
       return true;
@@ -66,6 +77,7 @@ class DataValidator {
       this._errors = {
         name: name || null,
       };
+      this._errorCode = errorConstants.INVALID_NAME;
       return false;
     } else {
       return true;
@@ -83,6 +95,7 @@ class DataValidator {
       this._errors = {
         email: email || null,
       };
+      this._errorCode = errorConstants.INVALID_EMAIL_OR_PASSWORD;
       return false;
     } else {
       return true;
@@ -97,6 +110,7 @@ class DataValidator {
     const validationResult = validationSchema.validate({password: password});
     if (validationResult.error !== undefined) {
       this._message = validationResult.error.details[0].message;
+      this._errorCode = errorConstants.INVALID_EMAIL_OR_PASSWORD;
       this._errors = {
         password: password || null,
       };
@@ -116,6 +130,7 @@ class DataValidator {
     error.statusCode = httpStatus.BAD_REQUEST;
     error.message = this.message;
     error.errors = this.errors;
+    error.errorCode = this.errorCode;
     return error;
   }
 }

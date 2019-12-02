@@ -7,6 +7,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const {promisify} = require('util');
 const _ = require('lodash');
+const errorConstants = require('../constants/Error');
 
 exports.createUser = async (req, res, next) => {
   try {
@@ -23,6 +24,7 @@ exports.createUser = async (req, res, next) => {
       let error = new AppError();
       error.statusCode = httpStatus.BAD_REQUEST;
       error.message = 'There is already a user with this email';
+      error.errorCode = errorConstants.USER_ALREADY_EXISTS;
       error.errors = {email: req.body.email};
       return next(error);
     }
@@ -77,6 +79,7 @@ exports.getUser = async (req, res, next) => {
       let error = new AppError();
       error.statusCode = httpStatus.NOT_FOUND;
       error.message = 'User not found';
+      error.errorCode = errorConstants.USER_NOT_FOUND;
       error.errors = {'id': req.params.id};
       return next(error);
     }
@@ -113,6 +116,7 @@ exports.login = async (req, res, next) => {
       let error = new AppError();
       error.statusCode = httpStatus.UNAUTHORIZED;
       error.message = 'Invalid email or password';
+      error.errorCode = errorConstants.INVALID_EMAIL_OR_PASSWORD;
       error.errors = {};
       return next(error);
     }

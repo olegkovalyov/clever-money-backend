@@ -3,6 +3,9 @@ const Plan = require('../models/Plan');
 const AppError = require('../classes/AppError');
 const DataValidator = require('../classes/DataValidator');
 const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
+const _ = require('lodash');
+const errorConstants = require('../constants/Error');
 
 exports.createPlan = async (req, res, next) => {
   try {
@@ -13,11 +16,12 @@ exports.createPlan = async (req, res, next) => {
     ) {
       return next(dataValidator.getErrorObject());
     }
+    let decodedData = jwt.decode(req.headers.authorization.split(' ')[1]);
     const plan = await Plan.create({
       name: req.body.name,
       startDate: req.body.startDate,
       endDate: req.body.endDate,
-      userId: mongoose.Types.ObjectId(),
+      userId: decodedData.id,
     });
     res.send({
       status: 'success',
@@ -31,11 +35,18 @@ exports.createPlan = async (req, res, next) => {
 exports.updatePlan = async (req, res, next) => {
   try {
     const dataValidator = new DataValidator();
-    if (!dataValidator.validateMongoId(req.params.id)) {
+    if (!dataValidator.validateMongoId(req.params.id)
+        || !dataValidator.validateDate('startDate', req.body.startDate)
+        || !dataValidator.validateDate('endDate', req.body.endDate)
+        || !dataValidator.validateName(req.body.name)
+    ) {
       return next(dataValidator.getErrorObject());
     }
 
-    const plan = await Plan.findByIdAndUpdate(req.params.id, req.body, {
+    let decodedData = jwt.decode(req.headers.authorization.split(' ')[1]);
+    const updatedData = _.pick(req.body, ['name', 'startDate', 'endDate']);
+    updatedData.userId = decodedData.id;
+    const plan = await Plan.findOneAndUpdate({_id: req.params.id, userId: decodedData.id}, req.body, {
       new: true,
       runValidators: true,
     });
@@ -43,6 +54,7 @@ exports.updatePlan = async (req, res, next) => {
     if (!plan) {
       let error = new AppError();
       error.statusCode = httpStatus.NOT_FOUND;
+      error.errorCode = errorConstants.PLAN_NOT_FOUND;
       error.message = 'Plan not found';
       error.errors = {'id': req.params.id};
       return next(error);
@@ -62,10 +74,12 @@ exports.deletePlan = async (req, res, next) => {
     if (!dataValidator.validateMongoId(req.params.id)) {
       return next(dataValidator.getErrorObject());
     }
-    const result = await Plan.findByIdAndDelete(req.params.id);
+    let decodedData = jwt.decode(req.headers.authorization.split(' ')[1]);
+    const result = await Plan.findOneAndDelete({_id: req.params.id, userId: decodedData.id});
     if (!result) {
       let error = new AppError();
       error.statusCode = httpStatus.NOT_FOUND;
+      error.errorCode = errorConstants.PLAN_NOT_FOUND;
       error.message = 'Plan not found';
       error.errors = {'id': req.params.id};
       return next(error);
@@ -86,10 +100,12 @@ exports.getPlan = async (req, res, next) => {
     if (!dataValidator.validateMongoId(req.params.id)) {
       return next(dataValidator.getErrorObject());
     }
-    const plan = await Plan.findById(req.params.id);
+    let decodedData = jwt.decode(req.headers.authorization.split(' ')[1]);
+    const plan = await Plan.findOne({_id: req.params.id, userId: decodedData.id});
     if (!plan) {
       let error = new AppError();
       error.statusCode = httpStatus.NOT_FOUND;
+      error.errorCode = errorConstants.PLAN_NOT_FOUND;
       error.message = 'Plan not found';
       error.errors = {'id': req.params.id};
       return next(error);
@@ -105,7 +121,8 @@ exports.getPlan = async (req, res, next) => {
 
 exports.getPlans = async (req, res, next) => {
   try {
-    const planQuery = Plan.find();
+    let decodedData = jwt.decode(req.headers.authorization.split(' ')[1]);
+    const planQuery = Plan.find({userId: decodedData.id});
 
     // pagination
     if (req.query.pageNumber !== undefined

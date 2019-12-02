@@ -21,6 +21,7 @@ const userSchema = new mongoose.Schema({
   password: {
     type: types.String,
   },
+  passwordChangedAt: types.Date,
   active: {
     type: types.Boolean,
     default: true,
@@ -29,6 +30,16 @@ const userSchema = new mongoose.Schema({
 
 userSchema.methods.validatePassword = async function(password) {
   return await bcrypt.compare(password, this.password);
+};
+
+userSchema.methods.changedPasswordAfter = function(jwtCreatedTimestamp) {
+  if (this.passwordChangedAt) {
+    const timestampChangedPassword = Math.round(this.passwordChangedAt.getTime() / 1000);
+    if (timestampChangedPassword > jwtCreatedTimestamp) {
+      return true;
+    }
+  }
+  return false;
 };
 
 const User = mongoose.model('User', userSchema);

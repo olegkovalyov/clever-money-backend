@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const plansController = require('../controllers/plansController');
+const isAuthorized = require('../middleware/authorization');
 
-router.get('/', plansController.getPlans).post('/', plansController.createPlan);
+router.get('/', isAuthorized, plansController.getPlans).post('/', isAuthorized, plansController.createPlan);
 
-router.get('/:id', plansController.getPlan).
-    put('/:id', plansController.updatePlan).
-    delete('/:id', plansController.deletePlan);
+router.get('/:id', isAuthorized, plansController.getPlan).
+    put('/:id', isAuthorized, plansController.updatePlan).
+    delete('/:id', isAuthorized, plansController.deletePlan);
 
 module.exports = router;
