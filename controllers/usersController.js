@@ -54,7 +54,31 @@ exports.createUser = async (req, res, next) => {
 
 exports.updateUser = async (req, res, next) => {
   try {
+    const dataValidator = new DataValidator();
 
+    if (!dataValidator.validateMongoId(req.params.id)
+        || !dataValidator.validateName(req.body.name)
+        || !dataValidator.validateEmail(req.body.email)
+        || !dataValidator.validatePassword(req.body.password)
+    ) {
+      return next(dataValidator.getErrorObject());
+    }
+    let user = req.locals.user;
+    user.name = req.body.name;
+    user.email = req.body.email;
+    user.password = await bcrypt.hash(req.body.password, parseInt(process.env.SALT_ROUNDS));
+    await user.save();
+    const payload = {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+    };
+    const token = await promisify(jwt.sign)(payload, process.env.JWT_SECRET, {expiresIn: process.env.JTW_EXPIRATION});
+    res.send({
+      status: 'success',
+      data: _.pick(user, ['name', 'email', 'active', 'createdAt', 'updatedAt']),
+      token: token,
+    });
   } catch (error) {
     next(error);
   }
@@ -62,6 +86,25 @@ exports.updateUser = async (req, res, next) => {
 
 exports.deleteUser = async (req, res, next) => {
   try {
+    const dataValidator = new DataValidator();
+
+    if (!dataValidator.validateMongoId(req.params.id)) {
+      return next(dataValidator.getErrorObject());
+    }
+    const result = await User.findOneAndDelete({_id: req.params.id});
+    if (!result) {
+      let error = new AppError();
+      error.statusCode = httpStatus.NOT_FOUND;
+      error.errorCode = errorConstants.USER_NOT_FOUND;
+      error.message = 'User not found';
+      error.errors = {'id': req.params.id};
+      return next(error);
+    } else {
+      res.send({
+        status: 'success',
+        data: result,
+      });
+    }
 
   } catch (error) {
     next(error);
@@ -94,7 +137,54 @@ exports.getUser = async (req, res, next) => {
 
 exports.getUsers = async (req, res, next) => {
   try {
+    const userQuery = User.find();
 
+    // pagination
+    if (req.query.pageNumber !== undefined
+        && req.query.pageSize !== undefined
+    ) {
+      const pageNumber = parseInt(req.query.pageNumber) || 1;
+      const pageSize = parseInt(req.query.pageSize) || 20;
+      userQuery.skip((pageNumber - 1) * pageSize).limit(pageSize);
+    }
+
+    // sorting
+    const sortFields = ['name', 'email', 'createdAt', 'updatedAt'];
+    const directions = ['desc', 'asc'];
+    if (req.query.sort !== undefined
+        && req.query.direction !== undefined
+        && sortFields.includes(req.query.sort)
+        && directions.includes(req.query.direction)
+    ) {
+      const sortDirection = (req.query.direction === 'asc') ? 1 : -1;
+      switch (req.query.sort) {
+        case 'name':
+          userQuery.sort({name: sortDirection});
+          break;
+        case 'email':
+          userQuery.sort({email: sortDirection});
+          break;
+        case 'createdAt':
+          userQuery.sort({createdAt: sortDirection});
+          break;
+        case 'updatedAt':
+          userQuery.sort({updatedAt: sortDirection});
+          break;
+      }
+    } else {
+      userQuery.sort({createdAt: -1});
+    }
+
+    // execute query
+    const users = await userQuery;
+    let filteredUsers = [];
+    users.forEach(user => {
+      filteredUsers.push(_.pick(user, ['name', 'email', 'active', 'createdAt', 'updatedAt']));
+    });
+    res.send({
+      status: 'success',
+      data: filteredUsers,
+    });
   } catch (error) {
     next(error);
   }

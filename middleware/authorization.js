@@ -32,7 +32,7 @@ module.exports = async (req, res, next) => {
       error.errors = {token: token};
       return next(error);
     }
-
+    req.locals = {user: user};
   } catch (error) {
     return next(error);
   }
