@@ -11,6 +11,7 @@ class DataValidator {
   set errorCode(value) {
     this._errorCode = value;
   }
+
   _message = null;
   _errors = null;
   _errorCode = null;
@@ -66,6 +67,23 @@ class DataValidator {
     }
   }
 
+  validatePasswordConfirm(password, passwordConfirm) {
+    this.reset();
+    if (!this.validatePassword(password)) {
+      return false;
+    }
+    if (password !== passwordConfirm) {
+      this._message = 'Password confirmation error';
+      this._errorCode = errorConstants.PASSWORD_CONFIRMATION_ERROR;
+      this._errorCode = {
+        password: password,
+        passwordConfirm: passwordConfirm || null,
+      };
+      return false;
+    }
+    return true;
+  }
+
   validateName(name) {
     this.reset();
     const validationSchema = Joi.object({
@@ -113,6 +131,24 @@ class DataValidator {
       this._errorCode = errorConstants.INVALID_EMAIL_OR_PASSWORD;
       this._errors = {
         password: password || null,
+      };
+      return false;
+    } else {
+      return true;
+    }
+  }
+
+  validateResetToken(token) {
+    this.reset();
+    const validationSchema = Joi.object({
+      token: Joi.string().length(64),
+    });
+    const validationResult = validationSchema.validate({token: token});
+    if (validationResult.error !== undefined) {
+      this._message = validationResult.error.details[0].message;
+      this._errorCode = errorConstants.INVALID_RESET_TOKEN;
+      this._errors = {
+        token: token || null,
       };
       return false;
     } else {

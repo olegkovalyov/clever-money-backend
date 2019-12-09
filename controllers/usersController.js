@@ -2,11 +2,9 @@ const httpStatus = require('http-status-codes');
 const AppError = require('../classes/AppError');
 const DataValidator = require('../classes/DataValidator');
 const User = require('../models/User');
-const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
-const {promisify} = require('util');
 const _ = require('lodash');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
 const errorConstants = require('../constants/Error');
 
 exports.createUser = async (req, res, next) => {
@@ -28,19 +26,13 @@ exports.createUser = async (req, res, next) => {
       error.errors = {email: req.body.email};
       return next(error);
     }
-    const hash = await bcrypt.hash(req.body.password, parseInt(process.env.SALT_ROUNDS));
     user = await User.create({
       name: req.body.name,
       email: req.body.email,
-      password: hash,
+      password: req.body.password,
       active: true,
     });
-    const payload = {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-    };
-    const token = await promisify(jwt.sign)(payload, process.env.JWT_SECRET, {expiresIn: process.env.JTW_EXPIRATION});
+    const token = await user.createJsonWebToken();
     user = _.pick(user, ['_id', 'name', 'email', 'createdAt', 'updatedAt']);
     res.send({
       status: 'success',
@@ -66,14 +58,9 @@ exports.updateUser = async (req, res, next) => {
     let user = req.locals.user;
     user.name = req.body.name;
     user.email = req.body.email;
-    user.password = await bcrypt.hash(req.body.password, parseInt(process.env.SALT_ROUNDS));
+    user.password = req.body.password;
     await user.save();
-    const payload = {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-    };
-    const token = await promisify(jwt.sign)(payload, process.env.JWT_SECRET, {expiresIn: process.env.JTW_EXPIRATION});
+    const token = await user.createJsonWebToken();
     res.send({
       status: 'success',
       data: _.pick(user, ['name', 'email', 'active', 'createdAt', 'updatedAt']),
@@ -210,17 +197,108 @@ exports.login = async (req, res, next) => {
       error.errors = {};
       return next(error);
     }
-    const payload = {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-    };
-    const token = await promisify(jwt.sign)(payload, process.env.JWT_SECRET, {expiresIn: process.env.JTW_EXPIRATION});
+    const token = await user.createJsonWebToken();
     res.send({
       status: 'success',
       user: _.pick(user, ['_id', 'name', 'email', 'createdAt', 'updatedAt']),
       token: token,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.forgotPassword = async (req, res, next) => {
+  try {
+    const dataValidator = new DataValidator();
+    if (!dataValidator.validateEmail(req.body.email)) {
+      return next(dataValidator.getErrorObject());
+    }
+
+    let user = await User.findOne({email: req.body.email});
+    if (!user) {
+      let error = new AppError();
+      error.statusCode = httpStatus.UNAUTHORIZED;
+      error.message = 'Invalid email';
+      error.errorCode = errorConstants.INVALID_EMAIL_OR_PASSWORD;
+      error.errors = {};
+      return next(error);
+    }
+
+    const transport = nodemailer.createTransport({
+      host: process.env.EMAIL_HOST,
+      port: process.env.EMAIL_PORT,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD,
+      },
+    });
+    const passwordResetToken = user.createPasswordResetToken();
+    await user.save();
+
+    try {
+      let url = req.protocol + '://' + req.get('host');
+      await transport.sendMail({
+        from: 'support@clevermoney.com',
+        to: user.email,
+        subject: 'CleverMoney password reset',
+        text: url + '/api/v1/users/reset-password/' + passwordResetToken,
+      });
+    } catch (nodeMailError) {
+      let error = new AppError();
+      error.statusCode = httpStatus.INTERNAL_SERVER_ERROR;
+      error.message = 'Failed to send email';
+      error.errorCode = errorConstants.FAILED_TO_SEND_EMAIL;
+      error.errors = {};
+      return next(error);
+    }
+    res.send({
+      status: 'success',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.resetPassword = async (req, res, next) => {
+  try {
+    const dataValidator = new DataValidator();
+    if (!dataValidator.validateResetToken(req.body.resetToken)
+        || !dataValidator.validatePassword(req.body.password)
+        || !dataValidator.validatePasswordConfirm(req.body.password, req.body.passwordConfirm)
+    ) {
+      return next(dataValidator.getErrorObject());
+    }
+
+    const hashedToken = crypto.createHash('sha256').update(req.body.resetToken).digest('hex');
+    const user = await User.findOne({passwordResetToken: hashedToken});
+    if (!user) {
+      let error = new AppError();
+      error.statusCode = httpStatus.NOT_FOUND;
+      error.errorCode = errorConstants.USER_NOT_FOUND;
+      error.message = 'User not found';
+      error.errors = {'resetToken': req.body.resetToken};
+      return next(error);
+    } else {
+      if (!user.isResetTokenValid()) {
+        let error = new AppError();
+        error.statusCode = httpStatus.BAD_REQUEST;
+        error.errorCode = errorConstants.RESET_TOKEN_EXPIRED;
+        error.message = 'Reset token expired';
+        error.errors = {'resetToken': req.body.resetToken};
+        return next(error);
+      }
+      user.password = req.body.password;
+      user.passwordResetToken = null;
+      user.passwordResetExpires = null;
+      await user.save();
+      const token = await user.createJsonWebToken();
+      res.send({
+        status: 'success',
+        data: _.pick(user, ['name', 'email', 'active', 'createdAt', 'updatedAt']),
+        token: token,
+      });
+    }
   } catch (error) {
     next(error);
   }
