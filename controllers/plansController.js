@@ -2,7 +2,6 @@ const httpStatus = require('http-status-codes');
 const Plan = require('../models/Plan');
 const AppError = require('../classes/AppError');
 const DataValidator = require('../classes/DataValidator');
-const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const _ = require('lodash');
 const errorConstants = require('../constants/Error');

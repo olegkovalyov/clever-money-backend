@@ -71,6 +71,9 @@ module.exports = (error, req, res, next) => {
     }
       break;
   }
+
+  // MongoTimeoutError need to implement
+
   if (process.env.NODE_ENV === 'development') {
     console.log(error);
     console.log(errorType);

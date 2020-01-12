@@ -43,7 +43,9 @@ userSchema.pre('save', async function(next) {
   try {
     if (this.isModified('password')) {
       this.password = await bcrypt.hash(this.password, parseInt(process.env.SALT_ROUNDS));
-      this.passwordChangedAt = Date.now();
+      if (!this.isNew) {
+        this.passwordChangedAt = Date.now();
+      }
     }
     next();
   } catch (error) {

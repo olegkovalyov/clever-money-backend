@@ -123,7 +123,7 @@ class DataValidator {
   validatePassword(password) {
     this.reset();
     const validationSchema = Joi.object({
-      password: Joi.string().min(7).required(),
+      password: Joi.string().min(8).required(),
     });
     const validationResult = validationSchema.validate({password: password});
     if (validationResult.error !== undefined) {
