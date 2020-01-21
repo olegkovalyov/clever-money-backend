@@ -218,8 +218,8 @@ exports.forgotPassword = async (req, res, next) => {
     let user = await User.findOne({email: req.body.email});
     if (!user) {
       let error = new AppError();
-      error.statusCode = httpStatus.UNAUTHORIZED;
-      error.message = 'Invalid email';
+      error.statusCode = httpStatus.BAD_REQUEST;
+      error.message = 'Invalid email or user';
       error.errorCode = errorConstants.INVALID_EMAIL_OR_PASSWORD;
       error.errors = {};
       return next(error);
@@ -242,7 +242,8 @@ exports.forgotPassword = async (req, res, next) => {
         from: 'support@clevermoney.com',
         to: user.email,
         subject: 'CleverMoney password reset',
-        text: url + '/api/v1/users/reset-password/' + passwordResetToken,
+        text: '<a href="http://localhost:3000/change-password/' + passwordResetToken +
+            '">Click here to reset your password</a>',
       });
     } catch (nodeMailError) {
       let error = new AppError();
@@ -272,33 +273,26 @@ exports.resetPassword = async (req, res, next) => {
 
     const hashedToken = crypto.createHash('sha256').update(req.body.resetToken).digest('hex');
     const user = await User.findOne({passwordResetToken: hashedToken});
-    if (!user) {
+    if (!user
+        || !user.isResetTokenValid()
+    ) {
       let error = new AppError();
-      error.statusCode = httpStatus.NOT_FOUND;
-      error.errorCode = errorConstants.USER_NOT_FOUND;
-      error.message = 'User not found';
+      error.statusCode = httpStatus.BAD_REQUEST;
+      error.errorCode = errorConstants.RESET_TOKEN_EXPIRED;
+      error.message = 'User not found or token has expired';
       error.errors = {'resetToken': req.body.resetToken};
       return next(error);
-    } else {
-      if (!user.isResetTokenValid()) {
-        let error = new AppError();
-        error.statusCode = httpStatus.BAD_REQUEST;
-        error.errorCode = errorConstants.RESET_TOKEN_EXPIRED;
-        error.message = 'Reset token expired';
-        error.errors = {'resetToken': req.body.resetToken};
-        return next(error);
-      }
-      user.password = req.body.password;
-      user.passwordResetToken = null;
-      user.passwordResetExpires = null;
-      await user.save();
-      const token = await user.createJsonWebToken();
-      res.send({
-        status: 'success',
-        data: _.pick(user, ['name', 'email', 'active', 'createdAt', 'updatedAt']),
-        token: token,
-      });
     }
+    user.password = req.body.password;
+    user.passwordResetToken = null;
+    user.passwordResetExpires = null;
+    await user.save();
+    const token = await user.createJsonWebToken();
+    res.send({
+      status: 'success',
+      data: _.pick(user, ['name', 'email', 'active', 'createdAt', 'updatedAt']),
+      token: token,
+    });
   } catch (error) {
     next(error);
   }
